@@ -167,27 +167,27 @@ namespace HoloLensCameraStream
         /// <param name="matrix">The transform matrix used to convert between coordinate spaces.
         /// The matrix will have to be converted to a Unity matrix before it can be used by methods in the UnityEngine namespace.
         /// See https://forum.unity3d.com/threads/locatable-camera-in-unity.398803/ for details.</param>
-        public bool TryGetCameraToWorldMatrix(out float[] outMatrix)
+        public ETryGetCameraToWorldMatrixResult TryGetCameraToWorldMatrix(out float[] outMatrix)
         {
             // from https://github.com/qian256/HoloLensARToolKit/blob/bef36a89f191ab7d389d977c46639376069bbed6/HoloLensARToolKit/Assets/ARToolKitUWP/Scripts/ARUWPVideo.cs#L603
             if (worldOrigin == null)
             {
                 outMatrix = GetIdentityMatrixFloatArray();
-                return false;
+                return ETryGetCameraToWorldMatrixResult.WorldOriginNull;
             }
 
             SpatialCoordinateSystem cameraCoordinateSystem = frameReference.CoordinateSystem;
             if (cameraCoordinateSystem == null)
             {
                 outMatrix = GetIdentityMatrixFloatArray();
-                return false;
+                return ETryGetCameraToWorldMatrixResult.CoordinateSystemNull;
             }
 
             Matrix4x4? cameraCoordsToUnityCoordsMatrix = cameraCoordinateSystem.TryGetTransformTo(worldOrigin);
             if (cameraCoordsToUnityCoordsMatrix == null)
             {
                 outMatrix = GetIdentityMatrixFloatArray();
-                return false;
+                return ETryGetCameraToWorldMatrixResult.TransformNull;
             }
 
             Matrix4x4 cameraCoordsToUnityCoords = Matrix4x4.Transpose(cameraCoordsToUnityCoordsMatrix.Value);
@@ -200,8 +200,10 @@ namespace HoloLensCameraStream
 
             outMatrix = ConvertMatrixToFloatArray(cameraCoordsToUnityCoords);
 
-            return true;
+            return ETryGetCameraToWorldMatrixResult.Success;
         }
+
+
 
         /// <summary>
         /// This returns the projection matrix at the time the photo was captured, if location data if available.
@@ -344,5 +346,13 @@ namespace HoloLensCameraStream
         {
             return new float[] { 1f, 0, 0, 0, 0, 1f, 0, 0, 0, 0, 1f, 0, 0, 0, 0, 1f };
         }
+    }
+
+    public enum ETryGetCameraToWorldMatrixResult
+    {
+        Success,
+        WorldOriginNull,
+        CoordinateSystemNull,
+        TransformNull
     }
 }

@@ -148,7 +148,8 @@ namespace HoloLensCameraStream
 
         static private HololensDeviceType _hololensDeviceType = HololensDeviceType.Unknown;
 
-        static private MediaStreamType _mediaStreamType = MediaStreamType.VideoPreview;
+        //static private MediaStreamType _mediaStreamType = MediaStreamType.VideoPreview;
+        static private MediaStreamType _mediaStreamType = MediaStreamType.VideoRecord; //Preview is a bit faster but the image is distorted.
 
         private bool _sharedStream = false;
 
@@ -193,7 +194,8 @@ namespace HoloLensCameraStream
                 else if (group.DisplayName == "QC Back Camera")
                 {
                     _hololensDeviceType = HololensDeviceType.Hololens2;
-                    _mediaStreamType = MediaStreamType.VideoRecord;
+                    //_mediaStreamType = MediaStreamType.VideoRecord;
+                    _mediaStreamType = MediaStreamType.VideoPreview;
                     selectedGroupIndex = i;
                     break;
                 }

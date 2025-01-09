@@ -39,7 +39,7 @@ namespace HoloLensCameraStream
             throw new NotImplementedException();
         }
 
-        public bool TryGetCameraToWorldMatrix(out float[] outMatrix)
+        public ETryGetCameraToWorldMatrixResult TryGetCameraToWorldMatrix(out float[] outMatrix)
         {
             throw new NotImplementedException();
         }
@@ -58,5 +58,13 @@ namespace HoloLensCameraStream
         {
             throw new NotImplementedException();
         }
+    }
+
+    public enum ETryGetCameraToWorldMatrixResult
+    {
+        Success,
+        WorldOriginNull,
+        CoordinateSystemNull,
+        TransformNull
     }
 }
