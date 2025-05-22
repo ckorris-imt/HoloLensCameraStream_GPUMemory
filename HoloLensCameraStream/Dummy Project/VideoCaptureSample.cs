@@ -22,6 +22,8 @@ namespace HoloLensCameraStream
 
         public int FrameHeight { get; private set; }
 
+        public uint FocusDistance { get; private set; }
+
         public TimeSpan FrameTime { get; private set; }
 
         public void CopyRawImageDataIntoBuffer(byte[] byteBuffer)

@@ -71,12 +71,14 @@ namespace HoloLensCameraStream
                     return null;
                 }
 
-                return new CameraIntrinsics(mediaFrameIntrinsics);
+                return new CameraIntrinsics(mediaFrameIntrinsics, FocusDistance);
             }
         }
 
         public int FrameWidth { get; private set; }
         public int FrameHeight { get; private set; }
+
+        public uint FocusDistance { get; private set; }
 
         public TimeSpan FrameTime { get; private set; }
 
@@ -92,7 +94,7 @@ namespace HoloLensCameraStream
 
         MediaFrameReference frameReference;
 
-        internal VideoCaptureSample(MediaFrameReference frameReference, SpatialCoordinateSystem worldOrigin)
+        internal VideoCaptureSample(MediaFrameReference frameReference, SpatialCoordinateSystem worldOrigin, uint focusDistance)
         {
             if (frameReference == null)
             {
@@ -102,6 +104,8 @@ namespace HoloLensCameraStream
             this.frameReference = frameReference;
             this.worldOrigin = worldOrigin;
             FrameTime = frameReference.SystemRelativeTime.Value;
+
+            FocusDistance = focusDistance;
 
             bitmap = frameReference.VideoMediaFrame.SoftwareBitmap;
             d3dSurface = frameReference.VideoMediaFrame.Direct3DSurface;

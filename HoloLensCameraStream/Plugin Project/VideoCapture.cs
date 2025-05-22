@@ -18,6 +18,7 @@ using Windows.Perception.Spatial;
 using Windows.Foundation.Collections;
 using Windows.Foundation;
 using System.Diagnostics;
+using Windows.Media.Devices;
 
 
 namespace HoloLensCameraStream
@@ -148,8 +149,8 @@ namespace HoloLensCameraStream
 
         static private HololensDeviceType _hololensDeviceType = HololensDeviceType.Unknown;
 
-        //static private MediaStreamType _mediaStreamType = MediaStreamType.VideoPreview;
-        static private MediaStreamType _mediaStreamType = MediaStreamType.VideoRecord; //Preview is a bit faster but the image is distorted.
+        static private MediaStreamType _mediaStreamType = MediaStreamType.VideoPreview;
+        //static private MediaStreamType _mediaStreamType = MediaStreamType.VideoRecord; //Preview is a bit faster but the image is distorted.
 
         private bool _sharedStream = false;
 
@@ -186,7 +187,7 @@ namespace HoloLensCameraStream
                 if (group.DisplayName == "MN34150")
                 {
                     _hololensDeviceType = HololensDeviceType.Hololens1;
-                    _mediaStreamType = MediaStreamType.VideoPreview;
+                    //_mediaStreamType = MediaStreamType.VideoPreview;
                     //_mediaStreamType = MediaStreamType.VideoRecord; // using AddVideoEffect and VideoEncodingProperties
                     selectedGroupIndex = i;
                     break;
@@ -195,7 +196,7 @@ namespace HoloLensCameraStream
                 {
                     _hololensDeviceType = HololensDeviceType.Hololens2;
                     //_mediaStreamType = MediaStreamType.VideoRecord;
-                    _mediaStreamType = MediaStreamType.VideoPreview;
+                    //_mediaStreamType = MediaStreamType.VideoPreview;
                     selectedGroupIndex = i;
                     break;
                 }
@@ -349,6 +350,67 @@ namespace HoloLensCameraStream
             _frameReader.FrameArrived += HandleFrameArrived;
             await _frameReader.StartAsync();
 
+            //_mediaCapture.VideoDeviceController.Focus.TrySetAuto(true);
+            //_mediaCapture.VideoDeviceController.Focus.TrySetAuto(false); //TEST
+            bool isSupported = _mediaCapture.VideoDeviceController.FocusControl.Supported;
+            Debug.WriteLine($"FocusControl supported: {isSupported}");
+
+            if (isSupported)
+            {
+                FocusControl focusControl = _mediaCapture.VideoDeviceController.FocusControl;
+
+                //I printed out the HoloLens 2 FocusControl.SupportedPresets and got Auto, Manual, AutoMacro, and AutoNormal.
+                //Then I did Mode, and got Auto, Single, Manual, and Continuous.
+                //Then I did Range, and got FullRange, Normal, and Macro.
+                //FocusStep is 1.
+
+                //await focusControl.LockAsync();
+                //Debug.WriteLine($"FocusControl locked.");
+
+                //await focusControl.SetPresetAsync(FocusPreset.Manual);
+                //Debug.WriteLine($"Set FocusControl to {focusControl.Preset}.");
+
+                await focusControl.UnlockAsync(); // Optional
+                Debug.WriteLine($"FocusControl unlocked.");
+                //await focusControl.LockAsync();
+                //Debug.WriteLine($"FocusControl locked.");
+
+
+                FocusSettings focusSettings = new FocusSettings()
+                {
+                    Mode = FocusMode.Manual,
+                    Distance = ManualFocusDistance.Nearest,
+                    Value = 300, //TEST
+                    WaitForFocus = false,
+                    DisableDriverFallback = false,
+                    AutoFocusRange = AutoFocusRange.Normal
+                };
+
+                Debug.WriteLine($"About to set focus settings.");
+
+                focusControl.Configure(focusSettings);
+
+                Debug.WriteLine($"Focus mode: {focusControl.Mode}");
+
+                Debug.WriteLine($"Set focus settings.");
+
+                try
+                {
+                    await focusControl.SetPresetAsync(FocusPreset.Manual);
+                    Debug.WriteLine($"Set FocusControl to {focusControl.Preset}.");
+                }
+                catch (Exception e)
+                {
+                    Debug.WriteLine($"Failed to set FocusControl preset: {e.Message}");
+                }
+
+                await focusControl.SetValueAsync(300); //TEST
+                Debug.WriteLine($"Set focus Value to {focusControl.Value}.");
+
+                //await focusControl.UnlockAsync();
+                //Debug.WriteLine($"FocusControl unlocked.");
+            }
+
             onVideoModeStartedCallback?.Invoke(new VideoCaptureResult(0, ResultType.Success, true));
         }
 
@@ -382,7 +444,8 @@ namespace HoloLensCameraStream
                 {
                     if (frameReference != null)
                     {
-                        onFrameSampleAcquired.Invoke(new VideoCaptureSample(frameReference, worldOrigin));
+                        onFrameSampleAcquired.Invoke(new VideoCaptureSample(frameReference, worldOrigin, 
+                            _mediaCapture.VideoDeviceController.FocusControl.Value));
                     }
                     else
                     {
@@ -458,8 +521,6 @@ namespace HoloLensCameraStream
                 VideoProfile = _videoProfile
             };
             await _mediaCapture.InitializeAsync(settings);
-
-            _mediaCapture.VideoDeviceController.Focus.TrySetAuto(true);
         }
 
         private Task SetFrameType(MediaFrameSource frameSource, int width, int height, int framerate)
@@ -491,7 +552,8 @@ namespace HoloLensCameraStream
             MediaFrameReference frameReference = _frameReader.TryAcquireLatestFrame();
             if (frameReference != null)
             {
-                var sample = new VideoCaptureSample(frameReference, worldOrigin);
+                var sample = new VideoCaptureSample(frameReference, worldOrigin, 
+                    _mediaCapture.VideoDeviceController.FocusControl.Value);
                 FrameSampleAcquired?.Invoke(sample);
             }
             else
