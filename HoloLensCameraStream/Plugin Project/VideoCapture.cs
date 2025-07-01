@@ -19,6 +19,8 @@ using Windows.Foundation.Collections;
 using Windows.Foundation;
 using System.Diagnostics;
 using Windows.Media.Devices;
+using Windows.UI.Xaml.Controls;
+using System.Text.RegularExpressions;
 
 
 namespace HoloLensCameraStream
@@ -129,6 +131,8 @@ namespace HoloLensCameraStream
             }
         }
 
+        public event Action<string> OnLogMessage;
+
         /// <summary>
         /// Allow direct setting of the spatial coordinate system due to unity bug in NET Native builds
         /// https://issuetracker.unity3d.com/issues/uwp-compile-net-native-for-hololens-causes-spatialcoordinatesystem-marshal-dot-getobjectforiunknown-exception
@@ -149,8 +153,8 @@ namespace HoloLensCameraStream
 
         static private HololensDeviceType _hololensDeviceType = HololensDeviceType.Unknown;
 
-        static private MediaStreamType _mediaStreamType = MediaStreamType.VideoPreview;
-        //static private MediaStreamType _mediaStreamType = MediaStreamType.VideoRecord; //Preview is a bit faster but the image is distorted.
+        //static private MediaStreamType _mediaStreamType = MediaStreamType.VideoPreview;
+        static private MediaStreamType _mediaStreamType = MediaStreamType.VideoRecord; //Preview is a bit faster but the image is distorted.
 
         private bool _sharedStream = false;
 
@@ -173,7 +177,7 @@ namespace HoloLensCameraStream
         /// If the instance failed to be created, the instance returned will be null. Also, holograms will not appear in the video.
         /// </summary>
         /// <param name="onCreatedCallback">This callback will be invoked when the VideoCapture instance is created and ready to be used.</param>
-        public static async void CreateAync(OnVideoCaptureResourceCreatedCallback onCreatedCallback, bool sharedStream = false)
+        public static async Task CreateAync(OnVideoCaptureResourceCreatedCallback onCreatedCallback, bool sharedStream = false)
         {
             //
             // Whether it is running on HoloLens 1 or HoloLens 2.
@@ -350,67 +354,6 @@ namespace HoloLensCameraStream
             _frameReader.FrameArrived += HandleFrameArrived;
             await _frameReader.StartAsync();
 
-            //_mediaCapture.VideoDeviceController.Focus.TrySetAuto(true);
-            //_mediaCapture.VideoDeviceController.Focus.TrySetAuto(false); //TEST
-            bool isSupported = _mediaCapture.VideoDeviceController.FocusControl.Supported;
-            Debug.WriteLine($"FocusControl supported: {isSupported}");
-
-            if (isSupported)
-            {
-                FocusControl focusControl = _mediaCapture.VideoDeviceController.FocusControl;
-
-                //I printed out the HoloLens 2 FocusControl.SupportedPresets and got Auto, Manual, AutoMacro, and AutoNormal.
-                //Then I did Mode, and got Auto, Single, Manual, and Continuous.
-                //Then I did Range, and got FullRange, Normal, and Macro.
-                //FocusStep is 1.
-
-                //await focusControl.LockAsync();
-                //Debug.WriteLine($"FocusControl locked.");
-
-                //await focusControl.SetPresetAsync(FocusPreset.Manual);
-                //Debug.WriteLine($"Set FocusControl to {focusControl.Preset}.");
-
-                await focusControl.UnlockAsync(); // Optional
-                Debug.WriteLine($"FocusControl unlocked.");
-                //await focusControl.LockAsync();
-                //Debug.WriteLine($"FocusControl locked.");
-
-
-                FocusSettings focusSettings = new FocusSettings()
-                {
-                    Mode = FocusMode.Manual,
-                    Distance = ManualFocusDistance.Nearest,
-                    Value = 300, //TEST
-                    WaitForFocus = false,
-                    DisableDriverFallback = false,
-                    AutoFocusRange = AutoFocusRange.Normal
-                };
-
-                Debug.WriteLine($"About to set focus settings.");
-
-                focusControl.Configure(focusSettings);
-
-                Debug.WriteLine($"Focus mode: {focusControl.Mode}");
-
-                Debug.WriteLine($"Set focus settings.");
-
-                try
-                {
-                    await focusControl.SetPresetAsync(FocusPreset.Manual);
-                    Debug.WriteLine($"Set FocusControl to {focusControl.Preset}.");
-                }
-                catch (Exception e)
-                {
-                    Debug.WriteLine($"Failed to set FocusControl preset: {e.Message}");
-                }
-
-                await focusControl.SetValueAsync(300); //TEST
-                Debug.WriteLine($"Set focus Value to {focusControl.Value}.");
-
-                //await focusControl.UnlockAsync();
-                //Debug.WriteLine($"FocusControl unlocked.");
-            }
-
             onVideoModeStartedCallback?.Invoke(new VideoCaptureResult(0, ResultType.Success, true));
         }
 
@@ -444,7 +387,7 @@ namespace HoloLensCameraStream
                 {
                     if (frameReference != null)
                     {
-                        onFrameSampleAcquired.Invoke(new VideoCaptureSample(frameReference, worldOrigin, 
+                        onFrameSampleAcquired.Invoke(new VideoCaptureSample(frameReference, worldOrigin,
                             _mediaCapture.VideoDeviceController.FocusControl.Value));
                     }
                     else
@@ -521,6 +464,22 @@ namespace HoloLensCameraStream
                 VideoProfile = _videoProfile
             };
             await _mediaCapture.InitializeAsync(settings);
+
+            Debug.WriteLine("Initialized media capture.");
+            OnLogMessage?.Invoke("Initialized media capture.");
+
+            _mediaCapture.Failed += OnMediaCaptureFailed;
+
+            Debug.WriteLine("Subscribed to Failed.");
+
+            _mediaCapture.CameraStreamStateChanged += OnCameraStreamStateChanged;
+
+            Debug.WriteLine("Subscribed to CameraStreamStateChanged.");
+
+            _mediaCapture.CaptureDeviceExclusiveControlStatusChanged += OnExclusiveControlChanged;
+
+            Debug.WriteLine("Subscribed to CaptureDeviceExclusiveControlStatusChanged.");
+
         }
 
         private Task SetFrameType(MediaFrameSource frameSource, int width, int height, int framerate)
@@ -541,6 +500,100 @@ namespace HoloLensCameraStream
 
         }
 
+
+        private void OnMediaCaptureFailed(MediaCapture s, MediaCaptureFailedEventArgs e)
+        {
+            OnLogMessage?.Invoke($"!MediaCapture failed: 0x{e.Code:X} – {e.Message}");
+            System.Diagnostics.Debug.WriteLine($"!MediaCapture failed: 0x{e.Code:X} – {e.Message}"); //Example comment.
+        }
+
+        private void OnCameraStreamStateChanged(MediaCapture s, object _)
+        {
+            OnLogMessage?.Invoke($"~CameraStreamState={s.CameraStreamState}");
+            System.Diagnostics.Debug.WriteLine($"~CameraStreamState={s.CameraStreamState}"); //Example comment.
+        }
+
+        private void OnExclusiveControlChanged(MediaCapture s,
+            MediaCaptureDeviceExclusiveControlStatusChangedEventArgs e)
+        {
+            OnLogMessage?.Invoke($"~ExclusiveControl={e.Status}");
+            System.Diagnostics.Debug.WriteLine($"~ExclusiveControl={e.Status}"); //Example comment.
+        }
+
+
+        #region Focus Settings
+
+        public void SetToAutoFocus()
+        {
+            IAsyncAction asyncAction = _mediaCapture.VideoDeviceController.FocusControl.SetPresetAsync(FocusPreset.AutoMacro);
+
+            asyncAction.Completed += (IAsyncAction asyncInfo, AsyncStatus asyncStatus) =>
+            {
+                if (asyncStatus == AsyncStatus.Completed)
+                {
+                    Debug.WriteLine($"Set FocusControl to {_mediaCapture.VideoDeviceController.FocusControl.Preset}.");
+                }
+                else
+                {
+                    Debug.WriteLine($"Failed to set FocusControl preset to AutoMacro. AsyncAction status: {asyncStatus}");
+                }
+            };
+        }
+
+        public void SetToManualFocus()
+        {
+            FocusControl focusControl = _mediaCapture.VideoDeviceController.FocusControl;
+
+            IAsyncAction asyncAction = focusControl.SetPresetAsync(FocusPreset.Manual);
+
+            //I printed out the HoloLens 2 FocusControl.SupportedPresets and got Auto, Manual, AutoMacro, and AutoNormal.
+            //Then I did Mode, and got Auto, Single, Manual, and Continuous.
+            //Then I did Range, and got FullRange, Normal, and Macro.
+            //FocusStep is 1.  
+
+            asyncAction.Completed += (IAsyncAction asyncInfo, AsyncStatus asyncStatus) =>
+            {
+                if (asyncStatus == AsyncStatus.Completed)
+                {
+                    Debug.WriteLine($"Set FocusControl to {focusControl.Preset}.");
+                    Debug.WriteLine($"Min: {focusControl.Min} Max: {focusControl.Max}");
+                }
+                else
+                {
+                    Debug.WriteLine($"Failed to set FocusControl preset to Manual. AsyncAction status: {asyncStatus}");
+                }
+            };
+        }
+
+        public void SetManualFocusDistance(uint focusDistanceMM)
+        {
+            FocusControl focusControl = _mediaCapture.VideoDeviceController.FocusControl;
+
+            if(focusDistanceMM < focusControl.Min || focusDistanceMM > focusControl.Max)
+            {
+                uint clampedValue = Math.Max(focusControl.Min, Math.Min(focusDistanceMM, focusControl.Max));
+                Debug.WriteLine($"Focus distance {focusDistanceMM} is out of range. Min: {focusControl.Min} Max: {focusControl.Max}. Setting to {clampedValue}.");
+                focusDistanceMM = clampedValue;
+                return;
+            }
+
+            IAsyncAction asyncAction = focusControl.SetValueAsync(focusDistanceMM);
+
+            asyncAction.Completed += (IAsyncAction asyncInfo, AsyncStatus asyncStatus) =>
+            {
+                if (asyncStatus == AsyncStatus.Completed)
+                {
+                    Debug.WriteLine($"Set focus value to {focusControl.Value}.");
+                }
+                else
+                {
+                    Debug.WriteLine($"Failed to set focus value to {focusDistanceMM}. AsyncAction status: {asyncStatus}");
+                }
+            };
+        }
+
+        #endregion
+
         void HandleFrameArrived(MediaFrameReader sender, MediaFrameArrivedEventArgs args)
         {
             if (FrameSampleAcquired == null)
@@ -552,7 +605,7 @@ namespace HoloLensCameraStream
             MediaFrameReference frameReference = _frameReader.TryAcquireLatestFrame();
             if (frameReference != null)
             {
-                var sample = new VideoCaptureSample(frameReference, worldOrigin, 
+                var sample = new VideoCaptureSample(frameReference, worldOrigin,
                     _mediaCapture.VideoDeviceController.FocusControl.Value);
                 FrameSampleAcquired?.Invoke(sample);
             }

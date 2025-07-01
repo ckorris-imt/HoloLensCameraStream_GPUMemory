@@ -1,4 +1,4 @@
-﻿//  
+//  
 // Copyright (c) 2017 Vulcan, Inc. All rights reserved.  
 // Licensed under the Apache 2.0 license. See LICENSE file in the project root for full license information.
 //
@@ -18,6 +18,9 @@ namespace HoloLensCameraStream
 
     public sealed class VideoCapture
     {
+
+        public event Action<string> OnLogMessage;
+
         public static IEnumerable<Resolution> SupportedResolutions
         {
             get
@@ -84,6 +87,21 @@ namespace HoloLensCameraStream
         }
 
         public void Dispose()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void SetToAutoFocus()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void SetToManualFocus()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void SetManualFocusDistance(uint focusDistanceMM)
         {
             throw new NotImplementedException();
         }
