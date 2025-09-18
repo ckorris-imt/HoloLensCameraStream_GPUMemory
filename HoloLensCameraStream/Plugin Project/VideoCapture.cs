@@ -165,11 +165,15 @@ namespace HoloLensCameraStream
         MediaCaptureVideoProfile _videoProfile;
         MediaFrameReader _frameReader;
 
+        FallbackOffsetHandler _fallbackOffsetHandler;
+
         VideoCapture(MediaFrameSourceGroup frameSourceGroup, MediaFrameSourceInfo frameSourceInfo, DeviceInformation deviceInfo)
         {
             _frameSourceGroup = frameSourceGroup;
             _frameSourceInfo = frameSourceInfo;
             _deviceInfo = deviceInfo;
+
+            _fallbackOffsetHandler = new FallbackOffsetHandler(frameSourceInfo);
         }
 
         /// <summary>
@@ -388,7 +392,7 @@ namespace HoloLensCameraStream
                     if (frameReference != null)
                     {
                         onFrameSampleAcquired.Invoke(new VideoCaptureSample(frameReference, worldOrigin,
-                            _mediaCapture.VideoDeviceController.FocusControl.Value));
+                            _mediaCapture.VideoDeviceController.FocusControl.Value, _fallbackOffsetHandler));
                     }
                     else
                     {
@@ -606,7 +610,7 @@ namespace HoloLensCameraStream
             if (frameReference != null)
             {
                 var sample = new VideoCaptureSample(frameReference, worldOrigin,
-                    _mediaCapture.VideoDeviceController.FocusControl.Value);
+                    _mediaCapture.VideoDeviceController.FocusControl.Value, _fallbackOffsetHandler);
                 FrameSampleAcquired?.Invoke(sample);
             }
             else

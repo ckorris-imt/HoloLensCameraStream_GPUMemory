@@ -65,6 +65,7 @@ namespace HoloLensCameraStream
     public enum ETryGetCameraToWorldMatrixResult
     {
         Success,
+        UsedFallback,
         WorldOriginNull,
         CoordinateSystemNull,
         TransformNull

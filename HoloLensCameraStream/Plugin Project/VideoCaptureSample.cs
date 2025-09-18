@@ -90,11 +90,14 @@ namespace HoloLensCameraStream
 
         internal bool isBitmapCopied { get; private set; }
 
+        internal readonly FallbackOffsetHandler _fallbackOffsetHandler;
+
         //Private members
 
         MediaFrameReference frameReference;
 
-        internal VideoCaptureSample(MediaFrameReference frameReference, SpatialCoordinateSystem worldOrigin, uint focusDistance)
+        internal VideoCaptureSample(MediaFrameReference frameReference, SpatialCoordinateSystem worldOrigin, 
+            uint focusDistance, FallbackOffsetHandler fallbackOffsetHandler)
         {
             if (frameReference == null)
             {
@@ -109,6 +112,7 @@ namespace HoloLensCameraStream
 
             bitmap = frameReference.VideoMediaFrame.SoftwareBitmap;
             d3dSurface = frameReference.VideoMediaFrame.Direct3DSurface;
+            _fallbackOffsetHandler = fallbackOffsetHandler;
 
             if (bitmap != null)
             {
@@ -174,24 +178,50 @@ namespace HoloLensCameraStream
         public ETryGetCameraToWorldMatrixResult TryGetCameraToWorldMatrix(out float[] outMatrix)
         {
             // from https://github.com/qian256/HoloLensARToolKit/blob/bef36a89f191ab7d389d977c46639376069bbed6/HoloLensARToolKit/Assets/ARToolKitUWP/Scripts/ARUWPVideo.cs#L603
-            if (worldOrigin == null)
+
+            ETryGetCameraToWorldMatrixResult result = ETryGetCameraToWorldMatrixResult.Success;
+            bool hasFailedAlready = false;
+
+
+            if (worldOrigin == null
+                || !worldOrigin.TryGetTransformTo(worldOrigin).HasValue)
             {
-                outMatrix = GetIdentityMatrixFloatArray();
-                return ETryGetCameraToWorldMatrixResult.WorldOriginNull;
+                result = ETryGetCameraToWorldMatrixResult.WorldOriginNull;
             }
+
 
             SpatialCoordinateSystem cameraCoordinateSystem = frameReference.CoordinateSystem;
-            if (cameraCoordinateSystem == null)
+            if (hasFailedAlready == false && cameraCoordinateSystem == null
+                || !cameraCoordinateSystem.TryGetTransformTo(worldOrigin).HasValue)
             {
-                outMatrix = GetIdentityMatrixFloatArray();
-                return ETryGetCameraToWorldMatrixResult.CoordinateSystemNull;
+                result = ETryGetCameraToWorldMatrixResult.CoordinateSystemNull;
             }
 
-            Matrix4x4? cameraCoordsToUnityCoordsMatrix = cameraCoordinateSystem.TryGetTransformTo(worldOrigin);
-            if (cameraCoordsToUnityCoordsMatrix == null)
+            Matrix4x4? cameraCoordsToUnityCoordsMatrix = default;
+            if (hasFailedAlready == false)
             {
-                outMatrix = GetIdentityMatrixFloatArray();
-                return ETryGetCameraToWorldMatrixResult.TransformNull;
+                cameraCoordsToUnityCoordsMatrix = cameraCoordinateSystem.TryGetTransformTo(worldOrigin);
+                if (cameraCoordsToUnityCoordsMatrix == null)
+                {
+                    result = ETryGetCameraToWorldMatrixResult.TransformNull;
+                }
+            }
+
+            //If we couldn't get the value the proper way, attempt to use the fallback handler.
+            if(hasFailedAlready)
+            { 
+                cameraCoordsToUnityCoordsMatrix = _fallbackOffsetHandler.EstimateCameraPoseAtTimestamp(FrameTime, worldOrigin);
+                if (cameraCoordsToUnityCoordsMatrix == null)
+                {
+                    result = ETryGetCameraToWorldMatrixResult.UsedFallback;
+
+                }
+                else
+                {
+                    //If nothing worked at all, just return the identity matrix and the first reason for failure.
+                    outMatrix = GetIdentityMatrixFloatArray();
+                    return result;
+                }
             }
 
             Matrix4x4 cameraCoordsToUnityCoords = Matrix4x4.Transpose(cameraCoordsToUnityCoordsMatrix.Value);
@@ -204,10 +234,11 @@ namespace HoloLensCameraStream
 
             outMatrix = ConvertMatrixToFloatArray(cameraCoordsToUnityCoords);
 
+            //If this worked, we've got a valid transform, so update the offset pose for the next time we don't.
+            _fallbackOffsetHandler.TryUpdatePose();
+
             return ETryGetCameraToWorldMatrixResult.Success;
         }
-
-
 
         /// <summary>
         /// This returns the projection matrix at the time the photo was captured, if location data if available.
@@ -355,6 +386,7 @@ namespace HoloLensCameraStream
     public enum ETryGetCameraToWorldMatrixResult
     {
         Success,
+        UsedFallback,
         WorldOriginNull,
         CoordinateSystemNull,
         TransformNull
