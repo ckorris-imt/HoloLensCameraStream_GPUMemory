@@ -214,7 +214,7 @@ namespace HoloLensCameraStream
             if(hasFailedAlready)
             { 
                 cameraCoordsToUnityCoordsMatrix = _fallbackOffsetHandler.EstimateCameraPoseAtTimestamp(FrameTime, worldOrigin);
-                if (cameraCoordsToUnityCoordsMatrix == null)
+                if (cameraCoordsToUnityCoordsMatrix != null)
                 {
                     result = ETryGetCameraToWorldMatrixResult.UsedFallback;
                 }
@@ -237,7 +237,7 @@ namespace HoloLensCameraStream
             outMatrix = ConvertMatrixToFloatArray(cameraCoordsToUnityCoords);
 
             //If this worked, we've got a valid transform, so update the offset pose for the next time we don't.
-            _fallbackOffsetHandler.TryUpdatePose();
+            _fallbackOffsetHandler.TryUpdatePose(frameReference);
 
             return result;
         }

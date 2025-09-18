@@ -173,7 +173,7 @@ namespace HoloLensCameraStream
             _frameSourceInfo = frameSourceInfo;
             _deviceInfo = deviceInfo;
 
-            _fallbackOffsetHandler = new FallbackOffsetHandler(frameSourceInfo);
+            _fallbackOffsetHandler = new FallbackOffsetHandler();
         }
 
         /// <summary>

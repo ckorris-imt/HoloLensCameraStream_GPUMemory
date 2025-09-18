@@ -4,39 +4,45 @@ using Windows.Media.Capture.Frames;
 using Windows.Perception;
 using Windows.Perception.Spatial;
 
+
 namespace HoloLensCameraStream
 {
     public class FallbackOffsetHandler
     {
-        private readonly MediaFrameSourceInfo _mediaFrameSourceInfo;
-        private Matrix4x4? _sensorToHeadsetTransform;
+        private Matrix4x4? _sensorToHeadsetTransform = null;
 
-        public FallbackOffsetHandler(MediaFrameSourceInfo mediaFrameSourceInfo)
+        public void TryUpdatePose(MediaFrameReference mediaFrameReference)
         {
-            _mediaFrameSourceInfo = mediaFrameSourceInfo
-                ?? throw new ArgumentNullException(nameof(mediaFrameSourceInfo));
+            PerceptionTimestamp perceptionTimestamp
+                = PerceptionTimestampHelper.FromSystemRelativeTargetTime(mediaFrameReference.SystemRelativeTime.Value);
 
-            TryUpdatePose();
-        }
+            System.Diagnostics.Debug.WriteLine("Got PerceptionTimestamp.");
 
-        public void TryUpdatePose()
-        {
-            System.Diagnostics.Debug.WriteLine("Try update pose.");
+            SpatialLocation hmdLocation = SpatialLocator.GetDefault()
+                .TryLocateAtTimestamp(perceptionTimestamp, mediaFrameReference.CoordinateSystem);
 
-            SpatialCoordinateSystem headsetOrigin = SpatialLocator.GetDefault()
-                .CreateStationaryFrameOfReferenceAtCurrentLocation()
-                .CoordinateSystem;
+            System.Diagnostics.Debug.WriteLine($"Called TryLocateAtTimestamp. Worked: {hmdLocation != null}");
 
-            if(_mediaFrameSourceInfo.CoordinateSystem == null)
+            if (hmdLocation.Position == null || hmdLocation.Orientation == null)
             {
-                System.Diagnostics.Debug.WriteLine("MediaFrameSourceInfo does not have a CoordinateSystem. Cannot compute sensor to headset transform.");
-                return;
+                System.Diagnostics.Debug.WriteLine("Failed to update pose.");
+                return; //Unable to locate the camera at the given timestamp.
             }
 
-            Matrix4x4? transform = _mediaFrameSourceInfo.CoordinateSystem.TryGetTransformTo(headsetOrigin);
-            if (transform.HasValue)
+            Matrix4x4 hmdPosRelativeToFrame = Matrix4x4.CreateFromQuaternion(hmdLocation.Orientation) *
+                Matrix4x4.CreateTranslation(hmdLocation.Position);
+
+            System.Diagnostics.Debug.WriteLine("Made hmdPosRelativeToFrame.");
+
+            Matrix4x4 sensorToHeadsetTransform;
+            if (Matrix4x4.Invert(hmdPosRelativeToFrame, out sensorToHeadsetTransform))
             {
-                _sensorToHeadsetTransform = transform.Value;
+                System.Diagnostics.Debug.WriteLine("Updated pose.");
+                _sensorToHeadsetTransform = sensorToHeadsetTransform;
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("Failed to invert pose.");
             }
         }
 
@@ -50,16 +56,27 @@ namespace HoloLensCameraStream
             PerceptionTimestamp perceptionTimestamp
                 = PerceptionTimestampHelper.FromSystemRelativeTargetTime(timestamp);
 
-            SpatialLocation location = SpatialLocator.GetDefault()
-                .TryLocateAtTimestamp(perceptionTimestamp, worldOrigin);
+            SpatialLocator locator = SpatialLocator.GetDefault();
 
-            if (location.Position == null || location.Orientation == null)
+            if(locator.Locatability != SpatialLocatability.PositionalTrackingActive)
             {
+                System.Diagnostics.Debug.WriteLine($"EstimateCameraPoseAtTimestamp called, but locatability is {locator.Locatability}.");
+                return null; //Locatability is not active, cannot estimate pose.
+            }
+
+            SpatialLocation location = locator.TryLocateAtTimestamp(perceptionTimestamp, worldOrigin);
+
+            if (location == null ||
+                location.Position == null || location.Orientation == null)
+            {
+                System.Diagnostics.Debug.WriteLine("EstimateCameraPoseAtTimestamp couldn't get location at timestamp.");
                 return null; //Unable to locate the camera at the given timestamp.
             }
 
             Matrix4x4 headsetPose = Matrix4x4.CreateFromQuaternion(location.Orientation) *
                 Matrix4x4.CreateTranslation(location.Position);
+
+            System.Diagnostics.Debug.WriteLine("EstimateCameraPoseAtTimestamp worked.");
 
             return _sensorToHeadsetTransform * headsetPose;
         }
