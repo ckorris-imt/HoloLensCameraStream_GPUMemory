@@ -187,6 +187,7 @@ namespace HoloLensCameraStream
                 || !worldOrigin.TryGetTransformTo(worldOrigin).HasValue)
             {
                 result = ETryGetCameraToWorldMatrixResult.WorldOriginNull;
+                hasFailedAlready = true;
             }
 
 
@@ -195,6 +196,7 @@ namespace HoloLensCameraStream
                 || !cameraCoordinateSystem.TryGetTransformTo(worldOrigin).HasValue)
             {
                 result = ETryGetCameraToWorldMatrixResult.CoordinateSystemNull;
+                hasFailedAlready = true;
             }
 
             Matrix4x4? cameraCoordsToUnityCoordsMatrix = default;
@@ -204,6 +206,7 @@ namespace HoloLensCameraStream
                 if (cameraCoordsToUnityCoordsMatrix == null)
                 {
                     result = ETryGetCameraToWorldMatrixResult.TransformNull;
+                    hasFailedAlready = true;
                 }
             }
 
@@ -214,7 +217,6 @@ namespace HoloLensCameraStream
                 if (cameraCoordsToUnityCoordsMatrix == null)
                 {
                     result = ETryGetCameraToWorldMatrixResult.UsedFallback;
-
                 }
                 else
                 {
@@ -237,7 +239,7 @@ namespace HoloLensCameraStream
             //If this worked, we've got a valid transform, so update the offset pose for the next time we don't.
             _fallbackOffsetHandler.TryUpdatePose();
 
-            return ETryGetCameraToWorldMatrixResult.Success;
+            return result;
         }
 
         /// <summary>
