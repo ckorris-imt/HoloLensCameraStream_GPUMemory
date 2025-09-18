@@ -13,7 +13,7 @@ namespace HoloLensCameraStream
 
         public FallbackOffsetHandler(MediaFrameSourceInfo mediaFrameSourceInfo)
         {
-            _mediaFrameSourceInfo = mediaFrameSourceInfo 
+            _mediaFrameSourceInfo = mediaFrameSourceInfo
                 ?? throw new ArgumentNullException(nameof(mediaFrameSourceInfo));
 
             TryUpdatePose();
@@ -21,9 +21,17 @@ namespace HoloLensCameraStream
 
         public void TryUpdatePose()
         {
+            System.Diagnostics.Debug.WriteLine("Try update pose.");
+
             SpatialCoordinateSystem headsetOrigin = SpatialLocator.GetDefault()
                 .CreateStationaryFrameOfReferenceAtCurrentLocation()
                 .CoordinateSystem;
+
+            if(_mediaFrameSourceInfo.CoordinateSystem == null)
+            {
+                System.Diagnostics.Debug.WriteLine("MediaFrameSourceInfo does not have a CoordinateSystem. Cannot compute sensor to headset transform.");
+                return;
+            }
 
             Matrix4x4? transform = _mediaFrameSourceInfo.CoordinateSystem.TryGetTransformTo(headsetOrigin);
             if (transform.HasValue)
@@ -34,7 +42,7 @@ namespace HoloLensCameraStream
 
         public Matrix4x4? EstimateCameraPoseAtTimestamp(TimeSpan timestamp, SpatialCoordinateSystem worldOrigin)
         {
-            if(_sensorToHeadsetTransform.HasValue == false)
+            if (_sensorToHeadsetTransform.HasValue == false)
             {
                 return null; //Transform not available.
             }
